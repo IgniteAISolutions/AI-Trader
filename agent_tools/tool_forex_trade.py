@@ -1,12 +1,13 @@
 """
-Forex Trade MCP Tools for MT4/MT5.
+Forex Trade MCP Tools for MT4/MT5 and web trading platforms.
 
 Provides buy/sell/close/price/account tools that connect to a live
-MetaTrader 4 or MetaTrader 5 account via configurable backend.
+trading account via configurable backend.
 
 Backends:
   - mt5_native: MetaTrader5 Python package (Windows, lowest latency)
   - metaapi: MetaApi cloud SDK (any OS, ~100ms latency)
+  - browser: Playwright automation of FundedNext web trader (any OS)
   - simulation: Local simulation for testing (no real execution)
 
 Usage:
@@ -171,45 +172,62 @@ def calculate_lot_size(
     risk_percent: float,
     stop_loss_pips: float,
     symbol: str = "EURUSD",
+    take_profit_pips: float = 0.0,
 ) -> Dict[str, Any]:
     """
-    Calculate correct lot size for a trade based on risk parameters.
+    Calculate correct lot size based on account balance, risk %, and SL distance.
+
+    The stop-loss should be placed at market-structure invalidation first,
+    then this tool calculates the lot size to risk the correct dollar amount.
+    Never force a fixed SL distance - let the market dictate the SL, then
+    size the position accordingly.
 
     Args:
         balance: Current account balance in USD
-        risk_percent: Percentage of balance to risk (e.g., 30.0 for 30%)
-        stop_loss_pips: Stop loss distance in pips
+        risk_percent: Percentage of balance to risk (e.g., 0.5 for 0.5%)
+        stop_loss_pips: Stop loss distance in pips (based on market structure)
         symbol: Forex pair (default: EURUSD)
+        take_profit_pips: Take profit distance in pips (optional, for R:R calc)
 
     Returns:
-        Dict with calculated lot size, risk amount, and pip value.
+        Dict with calculated lot size, risk amount, R:R ratio, and pip value.
 
     Example:
-        balance=$100, risk_percent=30, stop_loss_pips=20, symbol=EURUSD
-        -> risk_amount=$30, pip_value_needed=$1.50/pip, lot_size=0.15
+        balance=$50000, risk_percent=0.5, stop_loss_pips=15, symbol=EURUSD
+        -> risk_amount=$250, lot_size=1.67, R:R depends on TP distance
     """
     risk_amount = balance * (risk_percent / 100)
     pip_value_needed = risk_amount / stop_loss_pips
     pip_value_per_lot = PIP_VALUES.get(symbol, 10.0)
     lot_size = pip_value_needed / pip_value_per_lot
 
-    # Round down to nearest micro lot (0.001)
-    lot_size = max(0.001, round(lot_size, 3))
+    # Round to nearest 0.01 lot (standard mini lot increment)
+    lot_size = max(0.01, round(lot_size, 2))
 
     # Recalculate actual risk with rounded lot size
     actual_risk = lot_size * pip_value_per_lot * stop_loss_pips
 
-    return {
+    # Calculate R:R if TP provided
+    rr_ratio = round(take_profit_pips / stop_loss_pips, 2) if take_profit_pips > 0 else None
+    potential_profit = lot_size * pip_value_per_lot * take_profit_pips if take_profit_pips > 0 else None
+
+    result = {
         "symbol": symbol,
         "balance": round(balance, 2),
         "risk_percent": risk_percent,
-        "risk_amount": round(risk_amount, 2),
+        "risk_amount_target": round(risk_amount, 2),
         "stop_loss_pips": stop_loss_pips,
         "pip_value_per_lot": pip_value_per_lot,
         "calculated_lot_size": lot_size,
         "actual_risk_usd": round(actual_risk, 2),
-        "potential_profit_usd": round(actual_risk, 2),  # 1:1 R:R at 20 pips
     }
+
+    if rr_ratio is not None:
+        result["take_profit_pips"] = take_profit_pips
+        result["risk_reward_ratio"] = rr_ratio
+        result["potential_profit_usd"] = round(potential_profit, 2)
+
+    return result
 
 
 @mcp.tool()
@@ -547,12 +565,19 @@ def get_account_summary() -> Dict[str, Any]:
         except ImportError:
             return {"error": "MetaTrader5 package not installed"}
 
+    elif backend == "browser":
+        # Browser backend: read from FundedNext web trader via Playwright
+        return {
+            "error": "Browser backend not yet configured. "
+                     "Set FUNDEDNEXT_EMAIL and FUNDEDNEXT_PASSWORD in .env",
+        }
+
     else:
         # Simulation: read from position file
         positions, action_id = _get_latest_position()
-        balance = 20.0
+        balance = 50000.0
         if positions:
-            balance = positions.get("CASH", 20.0)
+            balance = positions.get("CASH", 50000.0)
         return {
             "balance": balance,
             "equity": balance,
@@ -560,7 +585,7 @@ def get_account_summary() -> Dict[str, Any]:
             "free_margin": balance,
             "margin_level": 0.0,
             "profit": 0.0,
-            "leverage": "500:1",
+            "leverage": "100:1",
             "currency": "USD",
             "mode": "SIMULATION",
         }

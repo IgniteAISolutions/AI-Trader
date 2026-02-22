@@ -265,7 +265,7 @@ async def main(config_path=None):
             # Dynamically create Agent instance
             # Different agent types have different parameter requirements
             if agent_type == "BaseAgentForex":
-                # Forex agent with MT4/MT5 config and challenge mode support
+                # Forex agent with full challenge config and MT4/MT5 support
                 challenge_config = config.get("challenge_config", {})
                 mt4_mt5_config = config.get("mt4_mt5_config", {})
                 agent = AgentClass(
@@ -280,10 +280,7 @@ async def main(config_path=None):
                     init_date=INIT_DATE,
                     openai_base_url=openai_base_url,
                     openai_api_key=openai_api_key,
-                    challenge_mode=challenge_config.get("enabled", True),
-                    risk_percent=challenge_config.get("risk_percent_per_trade", 30.0),
-                    target_pips=challenge_config.get("target_pips", 20.0),
-                    target_balance=challenge_config.get("target_balance", 50000.0),
+                    challenge_config=challenge_config,
                     mt4_mt5_config=mt4_mt5_config,
                 )
             elif agent_type == "BaseAgentCrypto":
