@@ -33,6 +33,10 @@ AGENT_REGISTRY = {
     "BaseAgentCrypto": {
         "module": "agent.base_agent_crypto.base_agent_crypto",
         "class": "BaseAgentCrypto"
+    },
+    "BaseAgentForex": {
+        "module": "agent.base_agent_forex.base_agent_forex",
+        "class": "BaseAgentForex"
     }
 }
 
@@ -130,8 +134,12 @@ async def main(config_path=None):
         market = "cn"
     elif agent_type == "BaseAgentCrypto":
         market = "crypto"
+    elif agent_type == "BaseAgentForex":
+        market = "forex"
 
-    if market == "crypto":
+    if market == "forex":
+        print(f"🌍 Market type: Forex (MT4/MT5, 24/5 trading)")
+    elif market == "crypto":
         print(f"🌍 Market type: Cryptocurrency (24/7 trading)")
     elif market == "cn":
         print(f"🌍 Market type: A-shares (China)")
@@ -239,8 +247,10 @@ async def main(config_path=None):
         print(f"✅ Runtime config initialized: SIGNATURE={signature}, MARKET={market}")
 
         # Select symbols based on agent type and market
-        # Crypto agents don't use stock_symbols parameter
-        if agent_type == "BaseAgentCrypto":
+        # Forex and Crypto agents don't use stock_symbols parameter
+        if agent_type == "BaseAgentForex":
+            stock_symbols = None  # Forex agent uses its own forex_symbols
+        elif agent_type == "BaseAgentCrypto":
             stock_symbols = None  # Crypto agent uses its own crypto_symbols
         elif agent_type == "BaseAgentAStock" or agent_type == "BaseAgentAStock_Hour":
             stock_symbols = None  # Let BaseAgentAStock use its default SSE 50
@@ -253,8 +263,30 @@ async def main(config_path=None):
 
         try:
             # Dynamically create Agent instance
-            # Crypto agents have different parameter requirements
-            if agent_type == "BaseAgentCrypto":
+            # Different agent types have different parameter requirements
+            if agent_type == "BaseAgentForex":
+                # Forex agent with MT4/MT5 config and challenge mode support
+                challenge_config = config.get("challenge_config", {})
+                mt4_mt5_config = config.get("mt4_mt5_config", {})
+                agent = AgentClass(
+                    signature=signature,
+                    basemodel=basemodel,
+                    forex_symbols=config.get("trading_pairs"),
+                    log_path=log_path,
+                    max_steps=max_steps,
+                    max_retries=max_retries,
+                    base_delay=base_delay,
+                    initial_cash=initial_cash,
+                    init_date=INIT_DATE,
+                    openai_base_url=openai_base_url,
+                    openai_api_key=openai_api_key,
+                    challenge_mode=challenge_config.get("enabled", True),
+                    risk_percent=challenge_config.get("risk_percent_per_trade", 30.0),
+                    target_pips=challenge_config.get("target_pips", 20.0),
+                    target_balance=challenge_config.get("target_balance", 50000.0),
+                    mt4_mt5_config=mt4_mt5_config,
+                )
+            elif agent_type == "BaseAgentCrypto":
                 agent = AgentClass(
                     signature=signature,
                     basemodel=basemodel,
@@ -293,7 +325,9 @@ async def main(config_path=None):
             # Display final position summary
             summary = agent.get_position_summary()
             # Get currency symbol from agent's actual market (more accurate)
-            if agent.market == "crypto":
+            if agent.market == "forex":
+                currency_symbol = "$"
+            elif agent.market == "crypto":
                 currency_symbol = "USDT"
             elif agent.market == "cn":
                 currency_symbol = "¥"
