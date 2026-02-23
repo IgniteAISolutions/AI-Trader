@@ -68,8 +68,8 @@
 
     "models": [
         {
-            "name": "claude-opus-4-6",
-            "basemodel": "anthropic/claude-opus-4-6",
+            "name": "claude-sonnet-4-6",
+            "basemodel": "anthropic/claude-sonnet-4-6",
             "signature": "option-a-icmarkets",
             "enabled": true
         }
