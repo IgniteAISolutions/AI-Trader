@@ -37,62 +37,10 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain_core.messages import AIMessage
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain_openai import ChatOpenAI
-
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, project_root)
 
-
-class DeepSeekChatOpenAI(ChatOpenAI):
-    """Custom ChatOpenAI wrapper for DeepSeek API compatibility."""
-
-    def _create_message_dicts(self, messages: list, stop: Optional[list] = None) -> list:
-        message_dicts = super()._create_message_dicts(messages, stop)
-        for message_dict in message_dicts:
-            if "tool_calls" in message_dict:
-                for tool_call in message_dict["tool_calls"]:
-                    if "function" in tool_call and "arguments" in tool_call["function"]:
-                        args = tool_call["function"]["arguments"]
-                        if isinstance(args, str):
-                            try:
-                                tool_call["function"]["arguments"] = json.loads(args)
-                            except json.JSONDecodeError:
-                                pass
-        return message_dicts
-
-    def _generate(self, messages: list, stop: Optional[list] = None, **kwargs):
-        result = super()._generate(messages, stop, **kwargs)
-        for generation in result.generations:
-            for gen in generation:
-                if hasattr(gen, "message") and hasattr(gen.message, "additional_kwargs"):
-                    tool_calls = gen.message.additional_kwargs.get("tool_calls")
-                    if tool_calls:
-                        for tool_call in tool_calls:
-                            if "function" in tool_call and "arguments" in tool_call["function"]:
-                                args = tool_call["function"]["arguments"]
-                                if isinstance(args, str):
-                                    try:
-                                        tool_call["function"]["arguments"] = json.loads(args)
-                                    except json.JSONDecodeError:
-                                        pass
-        return result
-
-    async def _agenerate(self, messages: list, stop: Optional[list] = None, **kwargs):
-        result = await super()._agenerate(messages, stop, **kwargs)
-        for generation in result.generations:
-            for gen in generation:
-                if hasattr(gen, "message") and hasattr(gen.message, "additional_kwargs"):
-                    tool_calls = gen.message.additional_kwargs.get("tool_calls")
-                    if tool_calls:
-                        for tool_call in tool_calls:
-                            if "function" in tool_call and "arguments" in tool_call["function"]:
-                                args = tool_call["function"]["arguments"]
-                                if isinstance(args, str):
-                                    try:
-                                        tool_call["function"]["arguments"] = json.loads(args)
-                                    except json.JSONDecodeError:
-                                        pass
-        return result
+from agent.model_factory import create_llm_model, is_anthropic_model
 
 
 from prompts.agent_prompt_forex import STOP_SIGNAL, get_agent_system_prompt_forex
@@ -185,7 +133,11 @@ class BaseAgentForex:
         self.base_log_path = log_path or "./data/agent_data_forex"
 
         self.openai_base_url = openai_base_url or os.getenv("OPENAI_API_BASE")
-        self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
+        # For Anthropic models, prefer ANTHROPIC_API_KEY
+        if is_anthropic_model(basemodel):
+            self.openai_api_key = openai_api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY")
+        else:
+            self.openai_api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
 
         self.mt4_mt5_config = mt4_mt5_config or {}
         self.loop_interval_seconds = loop_interval_seconds
@@ -355,9 +307,14 @@ class BaseAgentForex:
             print(f"Min R:R ratio: {self.min_rr_ratio}:1")
 
         if not self.openai_api_key:
-            raise ValueError(
-                "OpenAI API key not set. Configure OPENAI_API_KEY in .env or config."
-            )
+            if is_anthropic_model(self.basemodel):
+                raise ValueError(
+                    "Anthropic API key not set. Configure ANTHROPIC_API_KEY in .env file."
+                )
+            else:
+                raise ValueError(
+                    "API key not set. Configure OPENAI_API_KEY (or ANTHROPIC_API_KEY for Claude) in .env file."
+                )
 
         try:
             self.client = MultiServerMCPClient(self.mcp_config)
@@ -375,22 +332,14 @@ class BaseAgentForex:
             )
 
         try:
-            if "deepseek" in self.basemodel.lower():
-                self.model = DeepSeekChatOpenAI(
-                    model=self.basemodel,
-                    base_url=self.openai_base_url,
-                    api_key=self.openai_api_key,
-                    max_retries=3,
-                    timeout=60,
-                )
-            else:
-                self.model = ChatOpenAI(
-                    model=self.basemodel,
-                    base_url=self.openai_base_url,
-                    api_key=self.openai_api_key,
-                    max_retries=3,
-                    timeout=60,
-                )
+            # Create AI model using model factory (auto-detects Anthropic, DeepSeek, OpenAI)
+            self.model = create_llm_model(
+                basemodel=self.basemodel,
+                openai_base_url=self.openai_base_url,
+                openai_api_key=self.openai_api_key,
+                max_retries=3,
+                timeout=60,
+            )
         except Exception as e:
             raise RuntimeError(f"Failed to initialize AI model: {e}")
 
