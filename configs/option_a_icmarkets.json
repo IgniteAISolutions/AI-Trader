@@ -1,0 +1,104 @@
+{
+    "agent_type": "BaseAgentForex",
+    "market": "forex",
+    "instance": "option_a",
+
+    "date_range": {
+        "init_date": "2026-01-01",
+        "end_date": "2026-12-31"
+    },
+
+    "challenge_config": {
+        "enabled": true,
+        "challenge_type": "compound",
+
+        "firm_rules": {
+            "compound": {
+                "description": "Option A: IC Markets micro account - aggressive compound from £47 upward",
+                "profit_target_percent": 100.0,
+                "firm_max_daily_loss_percent": 20.0,
+                "firm_max_total_drawdown_percent": 50.0,
+                "drawdown_type": "fixed",
+                "min_trading_days": 0,
+                "time_limit_days": null,
+                "phases": 1,
+                "leverage": "1:500",
+                "news_trading_allowed": true,
+                "weekend_holding_allowed": false
+            }
+        },
+
+        "personal_rules": {
+            "_comment": "Option A: More aggressive risk for small account compounding, but still disciplined",
+            "risk_percent_per_trade": 2.0,
+            "max_risk_percent_per_trade": 5.0,
+            "personal_daily_loss_cap_ratio": 0.5,
+            "max_trades_per_day": 3,
+            "max_concurrent_trades": 1,
+            "stop_trading_after_consecutive_losses": 2,
+            "stop_trading_after_daily_loss_trades": 3,
+            "reduce_size_at_target_percent": 60,
+            "reduced_risk_percent": 1.0,
+            "min_risk_reward_ratio": 1.5,
+            "max_spread_pips": 2.0,
+            "avoid_news_window_minutes": 30,
+            "require_sl_on_every_trade": true,
+            "require_tp_on_every_trade": true,
+            "max_sl_pips": 30,
+            "min_sl_pips": 5,
+            "move_sl_to_breakeven_at_rr": 1.0,
+            "trading_sessions": ["london_ny_overlap", "london"],
+            "preferred_session": "london_ny_overlap"
+        },
+
+        "account_size": 47.33,
+
+        "behavioral_rules": {
+            "after_loss_action": "reduce_next_trade_size_or_stop",
+            "after_two_consecutive_losses": "stop_trading_for_session",
+            "no_revenge_trading": true,
+            "no_strategy_switching": true,
+            "journal_every_trade": true
+        }
+    },
+
+    "trading_pairs": [
+        "EURUSD", "GBPUSD", "USDJPY"
+    ],
+
+    "models": [
+        {
+            "name": "claude-opus-4-6",
+            "basemodel": "anthropic/claude-opus-4-6",
+            "signature": "option-a-icmarkets",
+            "enabled": true
+        }
+    ],
+
+    "agent_config": {
+        "max_steps": 50,
+        "max_retries": 3,
+        "base_delay": 2.0,
+        "initial_cash": 47.33,
+        "verbose": true
+    },
+
+    "mt4_mt5_config": {
+        "backend": "mt5_native",
+        "login": "${MT5_LOGIN_IC}",
+        "password": "${MT5_PASSWORD_IC}",
+        "server": "${MT5_SERVER_IC}",
+        "mt5_path": "${MT5_PATH_IC}",
+        "timeout": 10000
+    },
+
+    "live_loop_config": {
+        "enabled": false,
+        "interval_seconds": 300,
+        "trading_sessions": ["london_ny_overlap"]
+    },
+
+    "log_config": {
+        "log_path": "./data/agent_data_forex"
+    }
+}
