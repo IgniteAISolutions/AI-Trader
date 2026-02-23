@@ -60,6 +60,23 @@ def _get_backend():
     return os.getenv("FOREX_BACKEND", "simulation")
 
 
+def _init_mt5():
+    """
+    Initialize MT5 connection, optionally pointing to a specific terminal.
+
+    Set MT5_PATH in .env to the terminal64.exe path if running multiple
+    MT5 instances (e.g., one for IC Markets, one for FundedNext).
+
+    Example:
+        MT5_PATH=C:\\Program Files\\MetaTrader 5 IC\\terminal64.exe
+    """
+    import MetaTrader5 as mt5
+    mt5_path = os.getenv("MT5_PATH")
+    if mt5_path:
+        return mt5.initialize(mt5_path)
+    return mt5.initialize()
+
+
 def _get_position_file():
     """Get the position file path for the current agent."""
     signature = get_config_value("SIGNATURE")
@@ -121,8 +138,8 @@ def get_forex_price(symbol: str) -> Dict[str, Any]:
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
             tick = mt5.symbol_info_tick(symbol)
             if tick is None:
                 return {"error": f"Symbol {symbol} not found in MT5"}
@@ -262,8 +279,8 @@ def buy_forex(
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
             tick = mt5.symbol_info_tick(symbol)
             if tick is None:
                 return {"error": f"Symbol {symbol} not found"}
@@ -384,8 +401,8 @@ def sell_forex(
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
             tick = mt5.symbol_info_tick(symbol)
             if tick is None:
                 return {"error": f"Symbol {symbol} not found"}
@@ -486,8 +503,8 @@ def close_forex_position(ticket: str) -> Dict[str, Any]:
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
 
             position = mt5.positions_get(ticket=int(ticket))
             if not position:
@@ -545,8 +562,8 @@ def get_account_summary() -> Dict[str, Any]:
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
 
             info = mt5.account_info()
             if info is None:
@@ -604,8 +621,8 @@ def get_open_trades() -> Dict[str, Any]:
     if backend == "mt5_native":
         try:
             import MetaTrader5 as mt5
-            if not mt5.initialize():
-                return {"error": "MT5 not initialized"}
+            if not _init_mt5():
+                return {"error": "MT5 not initialized. Check MT5 is running and MT5_PATH is correct."}
 
             positions = mt5.positions_get()
             if positions is None or len(positions) == 0:
